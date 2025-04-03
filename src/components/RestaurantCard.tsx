@@ -1,6 +1,7 @@
 
 import { Star } from "lucide-react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
+import { Link } from "react-router-dom";
 
 interface RestaurantCardProps {
   id: string;
@@ -24,7 +25,7 @@ const RestaurantCard = ({
   discount,
 }: RestaurantCardProps) => {
   return (
-    <div className="group cursor-pointer">
+    <Link to={`/restaurant/${id}`} className="group cursor-pointer">
       <div className="overflow-hidden rounded-lg">
         <AspectRatio ratio={4/3} className="bg-muted">
           <img
@@ -58,7 +59,7 @@ const RestaurantCard = ({
           <span>₹{priceForTwo} for two</span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
