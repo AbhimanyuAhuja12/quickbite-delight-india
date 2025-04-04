@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 // Types for our data structure
 export interface Restaurant {
