@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from "sonner";
 import { MENU_API, IMG_CDN_URL, API_OPTIONS } from '@/constants/api';
@@ -108,8 +109,10 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
       }
       
       const data = await response.json();
+      console.log("API Response:", data);
       
       const transformedData = transformSwiggyData(data);
+      console.log("Transformed Data:", transformedData);
       
       if (isLoadMore) {
         setRestaurants(prev => [...prev, ...transformedData]);
@@ -141,16 +144,44 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
   // Transform Swiggy API data to our Restaurant format
   const transformSwiggyData = (data: any): Restaurant[] => {
     try {
+      // Find the correct card that contains the restaurant list
       const cards = data?.data?.cards || [];
       
+      // Look for the restaurant list in different possible locations
+      let restaurantList = [];
+      
+      // First attempt: check for restaurant grid listing
       const restaurantListCard = cards.find((card: any) => 
         card?.card?.card?.gridElements?.infoWithStyle?.restaurants
       );
       
-      const restaurantList = restaurantListCard?.card?.card?.gridElements?.infoWithStyle?.restaurants || [];
+      if (restaurantListCard) {
+        restaurantList = restaurantListCard.card.card.gridElements.infoWithStyle.restaurants || [];
+      } else {
+        // Second attempt: check for restaurant carousel
+        const carouselCard = cards.find((card: any) => 
+          card?.card?.card?.id === "restaurant_grid_listing"
+        );
+        
+        if (carouselCard) {
+          restaurantList = carouselCard.card.card.restaurants || [];
+        }
+      }
+      
+      console.log("Restaurant list found:", restaurantList);
+      
+      if (!restaurantList || restaurantList.length === 0) {
+        // Third attempt: look deeper in the structure
+        for (const card of cards) {
+          if (card?.card?.card?.gridElements?.infoWithStyle?.restaurants) {
+            restaurantList = card.card.card.gridElements.infoWithStyle.restaurants;
+            break;
+          }
+        }
+      }
       
       return restaurantList.map((restaurant: any) => {
-        const info = restaurant.info || {};
+        const info = restaurant.info || restaurant.data?.data || restaurant;
         
         return {
           id: info.id || "",
@@ -158,9 +189,9 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
           image: info.cloudinaryImageId ? `${IMG_CDN_URL}${info.cloudinaryImageId}` : "",
           cuisine: info.cuisines || [],
           rating: info.avgRating || 0,
-          deliveryTime: info.sla?.deliveryTime || 30,
-          priceForTwo: info.costForTwo ? parseInt(info.costForTwo.substring(1)) : 300,
-          discount: info.aggregatedDiscountInfoV3?.header || info.offers?.length > 0 ? info.offers[0]?.info?.header : undefined
+          deliveryTime: info.sla?.deliveryTime || info.deliveryTime || 30,
+          priceForTwo: typeof info.costForTwo === 'string' ? parseInt(info.costForTwo.replace(/\D/g, '')) : (info.costForTwo || 300),
+          discount: info.aggregatedDiscountInfoV3?.header || info.offerMeta?.length > 0 ? info.offerMeta[0]?.header : undefined
         };
       });
     } catch (error) {
