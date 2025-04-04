@@ -1,9 +1,10 @@
 
 import { useState } from "react";
-import { MapPin, Search, Filter, SlidersHorizontal } from "lucide-react";
+import { MapPin, Search, Filter, SlidersHorizontal, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import RestaurantCard from "@/components/RestaurantCard";
 import NavBar from "@/components/NavBar";
 import Footer from "@/components/Footer";
@@ -129,7 +130,10 @@ const Restaurants = () => {
         {/* Error state */}
         {error && !loading && (
           <div className="text-center py-10">
-            <p className="text-red-500 mb-3">{error}</p>
+            <Alert variant="destructive" className="max-w-md mx-auto mb-4">
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
             <Button onClick={refetch} className="bg-orange-500 hover:bg-orange-600">
               Retry
             </Button>

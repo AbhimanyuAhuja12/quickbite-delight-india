@@ -26,12 +26,17 @@ const RestaurantCard = ({
 }: RestaurantCardProps) => {
   return (
     <Link to={`/restaurant/${id}`} className="group cursor-pointer">
-      <div className="overflow-hidden rounded-lg">
+      <div className="relative overflow-hidden rounded-lg">
         <AspectRatio ratio={4/3} className="bg-muted">
           <img
             src={image}
             alt={name}
             className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            onError={(e) => {
+              // Fallback image if the restaurant image fails to load
+              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=500&auto=format&fit=crop";
+            }}
           />
         </AspectRatio>
         
