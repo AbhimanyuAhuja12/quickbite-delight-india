@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from "sonner";
 import { MENU_API, IMG_CDN_URL, API_OPTIONS } from '@/constants/api';
 
@@ -27,6 +27,8 @@ interface UseRestaurantDataReturn {
   location: Location | null;
   setLocation: React.Dispatch<React.SetStateAction<Location | null>>;
   refetch: () => void;
+  loadMore: () => void;
+  hasMore: boolean;
 }
 
 const useRestaurantData = (): UseRestaurantDataReturn => {
@@ -34,6 +36,9 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const restaurantsPerPage = 6; // Number of restaurants to load each time
 
   // Function to detect user's current location
   const detectCurrentLocation = () => {
@@ -45,7 +50,6 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
           const newLocation = { latitude, longitude };
           
           try {
-            // Here you would normally make an API call to get city from coordinates
             const city = await getCityFromCoordinates(latitude, longitude);
             setLocation({ ...newLocation, city });
             toast.success(`Location detected: ${city}`);
@@ -72,9 +76,6 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
   // Get city name from coordinates
   const getCityFromCoordinates = async (latitude: number, longitude: number): Promise<string> => {
     try {
-      // You can integrate with a real geocoding service here
-      // For example: Google Maps Geocoding API or Nominatim (OpenStreetMap)
-      // For now, we'll continue with the mock implementation
       return new Promise((resolve) => {
         setTimeout(() => {
           const cities = ["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Kolkata"];
@@ -89,18 +90,17 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
   };
 
   // Function to fetch restaurants data from Swiggy API
-  const fetchRestaurants = async () => {
+  const fetchRestaurants = async (isLoadMore = false) => {
     if (!location) return;
     
-    setLoading(true);
+    if (!isLoadMore) {
+      setLoading(true);
+    }
     setError(null);
     
     try {
-      // Create API URL with location coordinates
-      // In a production app, you'd use the actual coordinates
       const apiUrl = MENU_API;
       
-      // Fetch data from Swiggy API
       const response = await fetch(apiUrl, API_OPTIONS);
       
       if (!response.ok) {
@@ -109,18 +109,30 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
       
       const data = await response.json();
       
-      // Transform Swiggy API response to our Restaurant format
       const transformedData = transformSwiggyData(data);
-      setRestaurants(transformedData);
+      
+      if (isLoadMore) {
+        setRestaurants(prev => [...prev, ...transformedData]);
+      } else {
+        setRestaurants(transformedData);
+      }
+      
+      setHasMore(transformedData.length >= restaurantsPerPage);
     } catch (err) {
       console.error("Error fetching restaurants:", err);
       setError("Failed to fetch restaurants. Please try again later.");
       toast.error("Failed to fetch restaurants");
       
-      // Fallback to mock data if API fails
       console.log("Falling back to mock data...");
-      const mockData = await simulateApiCall(location);
-      setRestaurants(mockData);
+      const mockData = await simulateApiCall(location, isLoadMore, page, restaurantsPerPage);
+      
+      if (isLoadMore) {
+        setRestaurants(prev => [...prev, ...mockData]);
+      } else {
+        setRestaurants(mockData);
+      }
+      
+      setHasMore(mockData.length >= restaurantsPerPage);
     } finally {
       setLoading(false);
     }
@@ -129,18 +141,14 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
   // Transform Swiggy API data to our Restaurant format
   const transformSwiggyData = (data: any): Restaurant[] => {
     try {
-      // Extract restaurants from Swiggy API response
-      // The actual structure depends on the Swiggy API response
       const cards = data?.data?.cards || [];
       
-      // Find the restaurant list card
       const restaurantListCard = cards.find((card: any) => 
         card?.card?.card?.gridElements?.infoWithStyle?.restaurants
       );
       
       const restaurantList = restaurantListCard?.card?.card?.gridElements?.infoWithStyle?.restaurants || [];
       
-      // Transform to our Restaurant format
       return restaurantList.map((restaurant: any) => {
         const info = restaurant.info || {};
         
@@ -157,16 +165,19 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
       });
     } catch (error) {
       console.error("Error transforming Swiggy data:", error);
-      // Return empty array if transformation fails
       return [];
     }
   };
 
-  // Simulate API call with mock data as fallback
-  const simulateApiCall = async (loc: Location): Promise<Restaurant[]> => {
+  // Simulate API call with mock data as fallback with pagination
+  const simulateApiCall = async (
+    loc: Location, 
+    isLoadMore = false,
+    currentPage = 1,
+    perPage = 6
+  ): Promise<Restaurant[]> => {
     return new Promise((resolve) => {
-      // Mock data for fallback
-      const mockRestaurants = [
+      const allMockRestaurants = [
         {
           id: "1",
           name: "Biryani House",
@@ -242,17 +253,98 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
           rating: 4.2,
           deliveryTime: 25,
           priceForTwo: 350
+        },
+        {
+          id: "9",
+          name: "Tandoori Express",
+          image: "https://images.unsplash.com/photo-1565557623262-b51c2513a641?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["North Indian", "Kebabs"],
+          rating: 4.3,
+          deliveryTime: 35,
+          priceForTwo: 400,
+          discount: "BOGO on Tikkas"
+        },
+        {
+          id: "10",
+          name: "Sushi Corner",
+          image: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["Japanese", "Sushi"],
+          rating: 4.6,
+          deliveryTime: 40,
+          priceForTwo: 600
+        },
+        {
+          id: "11",
+          name: "Thai Delight",
+          image: "https://images.unsplash.com/photo-1559847844-5315695dadae?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["Thai", "Asian"],
+          rating: 4.4,
+          deliveryTime: 35,
+          priceForTwo: 450,
+          discount: "Free Tom Yum Soup on orders above ₹600"
+        },
+        {
+          id: "12",
+          name: "Dessert King",
+          image: "https://images.unsplash.com/photo-1551024506-0bccd828d307?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["Desserts", "Ice Cream"],
+          rating: 4.7,
+          deliveryTime: 20,
+          priceForTwo: 300
+        },
+        {
+          id: "13",
+          name: "Morning Bakery",
+          image: "https://images.unsplash.com/photo-1467949576168-6ce8e2df4e13?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["Bakery", "Breakfast"],
+          rating: 4.5,
+          deliveryTime: 25,
+          priceForTwo: 200,
+          discount: "20% Off on Breakfast Combos"
+        },
+        {
+          id: "14",
+          name: "Street Food Corner",
+          image: "https://images.unsplash.com/photo-1513640127641-49ba81f8305c?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["Street Food", "Chaat"],
+          rating: 4.1,
+          deliveryTime: 15,
+          priceForTwo: 150
+        },
+        {
+          id: "15",
+          name: "Family Diner",
+          image: "https://images.unsplash.com/photo-1498654896293-37aacf113fd9?q=80&w=500&auto=format&fit=crop",
+          cuisine: ["Multi-Cuisine", "Family Meals"],
+          rating: 4.3,
+          deliveryTime: 45,
+          priceForTwo: 500,
+          discount: "10% Off on Family Combos"
         }
       ];
       
+      const start = (currentPage - 1) * perPage;
+      const end = start + perPage;
+      const paginatedData = allMockRestaurants.slice(start, end);
+      
       setTimeout(() => {
-        resolve(mockRestaurants);
+        resolve(paginatedData);
       }, 1000);
     });
   };
 
+  // Function to load more restaurants
+  const loadMore = useCallback(() => {
+    if (loading || !hasMore) return;
+    
+    setPage(prevPage => prevPage + 1);
+    fetchRestaurants(true);
+  }, [loading, hasMore]);
+
   // Function to manually trigger a refetch
   const refetch = () => {
+    setPage(1);
+    setHasMore(true);
     if (location) {
       fetchRestaurants();
     } else {
@@ -268,11 +360,13 @@ const useRestaurantData = (): UseRestaurantDataReturn => {
   // Effect to fetch restaurants when location changes
   useEffect(() => {
     if (location) {
+      setPage(1);
+      setHasMore(true);
       fetchRestaurants();
     }
   }, [location]);
 
-  return { restaurants, loading, error, location, setLocation, refetch };
+  return { restaurants, loading, error, location, setLocation, refetch, loadMore, hasMore };
 };
 
 export default useRestaurantData;

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { MapPin, Search, Filter, SlidersHorizontal, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,9 +21,31 @@ const filters = [
 ];
 
 const Restaurants = () => {
-  const { restaurants, loading, error, location, refetch } = useRestaurantData();
+  const { restaurants, loading, error, location, refetch, loadMore, hasMore } = useRestaurantData();
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Reference to observe the last restaurant card for infinite scrolling
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastRestaurantRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || loadingMore) return;
+    
+    // Disconnect the previous observer if it exists
+    if (observer.current) observer.current.disconnect();
+    
+    // Create a new observer
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        setLoadingMore(true);
+        loadMore();
+        setTimeout(() => setLoadingMore(false), 1000);
+      }
+    });
+    
+    // Observe the new last restaurant card
+    if (node) observer.current.observe(node);
+  }, [loading, loadingMore, hasMore, loadMore]);
 
   // Filter restaurants based on active filter and search query
   const filteredRestaurants = restaurants.filter(restaurant => {
@@ -114,7 +136,7 @@ const Restaurants = () => {
         </div>
 
         {/* Loading state */}
-        {loading && (
+        {loading && !loadingMore && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div key={i} className="space-y-3">
@@ -156,12 +178,35 @@ const Restaurants = () => {
         {/* Restaurant Grid */}
         {!loading && !error && displayRestaurants.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {displayRestaurants.map((restaurant) => (
-              <RestaurantCard
+            {displayRestaurants.map((restaurant, index) => (
+              <div
                 key={restaurant.id}
-                {...restaurant}
-              />
+                ref={index === displayRestaurants.length - 1 ? lastRestaurantRef : null}
+              >
+                <RestaurantCard {...restaurant} />
+              </div>
             ))}
+          </div>
+        )}
+
+        {/* Loading more indicator */}
+        {loadingMore && (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3].map((i) => (
+              <div key={`loading-more-${i}`} className="space-y-3">
+                <Skeleton className="h-48 w-full rounded-lg" />
+                <Skeleton className="h-5 w-4/5" />
+                <Skeleton className="h-4 w-3/5" />
+                <Skeleton className="h-4 w-2/5" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* No more restaurants indicator */}
+        {!loading && !loadingMore && !hasMore && restaurants.length > 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No more restaurants to load.
           </div>
         )}
       </main>
