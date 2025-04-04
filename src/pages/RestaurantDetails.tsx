@@ -5,108 +5,55 @@ import { Plus, Minus, Star, Clock, Info, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 import NavBar from "@/components/NavBar";
 import Footer from "@/components/Footer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  SWIGGY_MENU_API_URL, 
+  API_OPTIONS, 
+  MENU_ITEM_TYPE_KEY, 
+  RESTAURANT_TYPE_KEY,
+  CDN_URL
+} from "@/constants/api";
 
-// Mock restaurant data
-const restaurantData = {
-  id: "123",
-  name: "Biryani House Deluxe",
-  image: "https://images.unsplash.com/photo-1633945274405-b6c8069a1e43?q=80&w=1000&auto=format&fit=crop",
-  cuisines: ["North Indian", "Biryani", "Kebabs"],
-  rating: 4.3,
-  deliveryTime: 25,
-  priceForTwo: 400,
-  address: "123 Food Street, Mumbai, Maharashtra",
-  offers: [
-    "50% OFF up to ₹100",
-    "FREE delivery on orders above ₹199",
-  ],
-  description: "Serving the most authentic Hyderabadi biryani and North Indian delicacies since 1998."
-};
+// Interface for Restaurant data
+interface RestaurantInfo {
+  id: string;
+  name: string;
+  image: string;
+  cuisines: string[];
+  rating: number;
+  deliveryTime: number;
+  priceForTwo: number;
+  address: string;
+  offers: string[];
+  description: string;
+}
 
-// Mock menu categories
-const menuCategories = [
-  {
-    id: "cat1",
-    name: "Recommended",
-    items: [
-      {
-        id: "item1",
-        name: "Chicken Biryani",
-        description: "Fragrant basmati rice cooked with tender chicken pieces and aromatic spices.",
-        price: 220,
-        image: "https://images.unsplash.com/photo-1589302168068-964664d93dc0?q=80&w=300&auto=format&fit=crop",
-        veg: false,
-        bestseller: true,
-        rating: 4.5,
-      },
-      {
-        id: "item2",
-        name: "Paneer Butter Masala",
-        description: "Cottage cheese cubes simmered in rich tomato and butter gravy.",
-        price: 180,
-        image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=300&auto=format&fit=crop",
-        veg: true,
-        bestseller: true,
-        rating: 4.2,
-      },
-    ]
-  },
-  {
-    id: "cat2",
-    name: "Biryani",
-    items: [
-      {
-        id: "item3",
-        name: "Hyderabadi Dum Biryani",
-        description: "Signature Hyderabadi style biryani with basmati rice and meat cooked on slow fire.",
-        price: 250,
-        image: "https://images.unsplash.com/photo-1633945274524-389f76ecb8f0?q=80&w=300&auto=format&fit=crop",
-        veg: false,
-        bestseller: false,
-        rating: 4.6,
-      },
-      {
-        id: "item4",
-        name: "Veg Biryani",
-        description: "Mixed vegetables and basmati rice cooked with aromatic spices.",
-        price: 180,
-        image: "https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?q=80&w=300&auto=format&fit=crop",
-        veg: true,
-        bestseller: false,
-        rating: 4.0,
-      },
-    ]
-  },
-  {
-    id: "cat3",
-    name: "Starters",
-    items: [
-      {
-        id: "item5",
-        name: "Chicken Tikka",
-        description: "Boneless chicken pieces marinated and grilled in clay oven.",
-        price: 210,
-        image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?q=80&w=300&auto=format&fit=crop",
-        veg: false,
-        bestseller: true,
-        rating: 4.4,
-      },
-      {
-        id: "item6",
-        name: "Paneer Tikka",
-        description: "Cubes of cottage cheese marinated with spices and grilled.",
-        price: 190,
-        image: "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?q=80&w=300&auto=format&fit=crop",
-        veg: true,
-        bestseller: false,
-        rating: 4.3,
-      },
-    ]
-  },
-];
+// Interface for Menu Item
+interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  veg: boolean;
+  bestseller: boolean;
+  rating: number;
+}
+
+// Interface for Menu Category
+interface MenuCategory {
+  id: string;
+  name: string;
+  items: MenuItem[];
+}
+
+// Interface for Cart Item
+interface CartItem extends MenuItem {
+  quantity: number;
+}
 
 // Loading state component
 const MenuSkeleton = () => {
@@ -169,6 +116,9 @@ const MenuItem = ({ item, onAddToCart }) => {
           src={item.image} 
           alt={item.name} 
           className="w-full h-full object-cover rounded-md"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=500&auto=format&fit=crop";
+          }}
         />
         {item.veg ? (
           <div className="absolute top-1 left-1 w-4 h-4 border border-green-500 flex items-center justify-center">
@@ -272,25 +222,159 @@ const CartSummary = ({ cartItems }) => {
 const RestaurantDetails = () => {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
-  const [restaurant, setRestaurant] = useState(null);
-  const [menu, setMenu] = useState([]);
-  const [cartItems, setCartItems] = useState([]);
+  const [restaurant, setRestaurant] = useState<RestaurantInfo | null>(null);
+  const [menu, setMenu] = useState<MenuCategory[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   
   useEffect(() => {
-    // Simulate API call
-    const fetchData = async () => {
-      // In a real app, you would fetch data from an API using the restaurant ID
-      setTimeout(() => {
+    const fetchRestaurantDetails = async () => {
+      if (!id) return;
+      
+      setLoading(true);
+      
+      try {
+        // Fetch restaurant data from Swiggy API
+        const response = await fetch(`${SWIGGY_MENU_API_URL}${id}`, API_OPTIONS);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Parse restaurant info
+        const restaurantData = extractRestaurantInfo(data);
         setRestaurant(restaurantData);
+        
+        // Parse menu categories
+        const menuCategories = extractMenuCategories(data);
         setMenu(menuCategories);
+        
+        console.log("Restaurant data fetched:", restaurantData);
+        console.log("Menu categories fetched:", menuCategories);
+        
+      } catch (error) {
+        console.error("Error fetching restaurant details:", error);
+        toast.error("Failed to fetch restaurant details. Using mock data instead.");
+        
+        // Fallback to mock data
+        setRestaurant(mockRestaurantData);
+        setMenu(mockMenuCategories);
+      } finally {
         setLoading(false);
-      }, 1000);
+      }
     };
     
-    fetchData();
+    fetchRestaurantDetails();
   }, [id]);
   
-  const handleAddToCart = (item, quantity) => {
+  const extractRestaurantInfo = (data: any): RestaurantInfo => {
+    try {
+      // Find the restaurant card in the response
+      const cards = data?.data?.cards || [];
+      const restaurantCard = cards.find((card: any) => 
+        card?.card?.card?.["@type"] === RESTAURANT_TYPE_KEY
+      );
+      
+      const info = restaurantCard?.card?.card?.info || {};
+      
+      const restaurantInfo: RestaurantInfo = {
+        id: info.id || "",
+        name: info.name || "Restaurant Name",
+        image: info.cloudinaryImageId ? `${CDN_URL}${info.cloudinaryImageId}` : "https://images.unsplash.com/photo-1633945274405-b6c8069a1e43?q=80&w=1000&auto=format&fit=crop",
+        cuisines: info.cuisines || ["Cuisine not available"],
+        rating: info.avgRating || 0,
+        deliveryTime: info.sla?.deliveryTime || 30,
+        priceForTwo: info.costForTwo / 100 || 400,
+        address: `${info.locality}, ${info.city}` || "Address not available",
+        offers: extractOffers(data),
+        description: info.description || "Description not available"
+      };
+      
+      return restaurantInfo;
+    } catch (error) {
+      console.error("Error extracting restaurant info:", error);
+      return mockRestaurantData;
+    }
+  };
+  
+  const extractOffers = (data: any): string[] => {
+    try {
+      const cards = data?.data?.cards || [];
+      const offersCard = cards.find((card: any) => 
+        card?.card?.card?.gridElements?.infoWithStyle?.offers
+      );
+      
+      const offers = offersCard?.card?.card?.gridElements?.infoWithStyle?.offers || [];
+      
+      return offers.map((offer: any) => offer.info.header || "");
+    } catch (error) {
+      console.error("Error extracting offers:", error);
+      return ["Offer details not available"];
+    }
+  };
+  
+  const extractMenuCategories = (data: any): MenuCategory[] => {
+    try {
+      const cards = data?.data?.cards || [];
+      
+      // Find the menu card
+      const menuCards = cards.filter((card: any) => 
+        card?.groupedCard?.cardGroupMap?.REGULAR?.cards
+      );
+      
+      if (menuCards.length === 0) {
+        throw new Error("Menu cards not found");
+      }
+      
+      const menuItemCards = menuCards[0]?.groupedCard?.cardGroupMap?.REGULAR?.cards || [];
+      
+      // Extract menu categories
+      const categories: MenuCategory[] = [];
+      
+      menuItemCards.forEach((card: any) => {
+        const cardType = card?.card?.card?.["@type"];
+        
+        if (cardType === MENU_ITEM_TYPE_KEY) {
+          const categoryTitle = card?.card?.card?.title || "Items";
+          const itemCards = card?.card?.card?.itemCards || [];
+          
+          const items: MenuItem[] = itemCards.map((item: any) => {
+            const info = item?.card?.info || {};
+            const price = info.price || info.defaultPrice || 0;
+            
+            return {
+              id: info.id || `item-${Math.random().toString(36).substr(2, 9)}`,
+              name: info.name || "Item Name",
+              description: info.description || "No description available",
+              price: Math.round(price / 100) || 100, // Convert price from paise to rupees
+              image: info.imageId 
+                ? `${CDN_URL}${info.imageId}`
+                : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=500&auto=format&fit=crop",
+              veg: info.isVeg === 1,
+              bestseller: info.ribbon?.text === "Bestseller",
+              rating: info.ratings?.aggregatedRating?.rating || 0
+            };
+          });
+          
+          if (items.length > 0) {
+            categories.push({
+              id: `category-${Math.random().toString(36).substr(2, 9)}`,
+              name: categoryTitle,
+              items: items
+            });
+          }
+        }
+      });
+      
+      return categories.length > 0 ? categories : mockMenuCategories;
+    } catch (error) {
+      console.error("Error extracting menu categories:", error);
+      return mockMenuCategories;
+    }
+  };
+  
+  const handleAddToCart = (item: MenuItem, quantity: number) => {
     if (quantity === 0) {
       setCartItems(cartItems.filter(cartItem => cartItem.id !== item.id));
       return;
@@ -310,6 +394,105 @@ const RestaurantDetails = () => {
       setCartItems([...cartItems, { ...item, quantity }]);
     }
   };
+
+  // Mock restaurant data for fallback
+  const mockRestaurantData: RestaurantInfo = {
+    id: "123",
+    name: "Biryani House Deluxe",
+    image: "https://images.unsplash.com/photo-1633945274405-b6c8069a1e43?q=80&w=1000&auto=format&fit=crop",
+    cuisines: ["North Indian", "Biryani", "Kebabs"],
+    rating: 4.3,
+    deliveryTime: 25,
+    priceForTwo: 400,
+    address: "123 Food Street, Mumbai, Maharashtra",
+    offers: [
+      "50% OFF up to ₹100",
+      "FREE delivery on orders above ₹199",
+    ],
+    description: "Serving the most authentic Hyderabadi biryani and North Indian delicacies since 1998."
+  };
+
+  // Mock menu categories for fallback
+  const mockMenuCategories: MenuCategory[] = [
+    {
+      id: "cat1",
+      name: "Recommended",
+      items: [
+        {
+          id: "item1",
+          name: "Chicken Biryani",
+          description: "Fragrant basmati rice cooked with tender chicken pieces and aromatic spices.",
+          price: 220,
+          image: "https://images.unsplash.com/photo-1589302168068-964664d93dc0?q=80&w=300&auto=format&fit=crop",
+          veg: false,
+          bestseller: true,
+          rating: 4.5,
+        },
+        {
+          id: "item2",
+          name: "Paneer Butter Masala",
+          description: "Cottage cheese cubes simmered in rich tomato and butter gravy.",
+          price: 180,
+          image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=300&auto=format&fit=crop",
+          veg: true,
+          bestseller: true,
+          rating: 4.2,
+        },
+      ]
+    },
+    {
+      id: "cat2",
+      name: "Biryani",
+      items: [
+        {
+          id: "item3",
+          name: "Hyderabadi Dum Biryani",
+          description: "Signature Hyderabadi style biryani with basmati rice and meat cooked on slow fire.",
+          price: 250,
+          image: "https://images.unsplash.com/photo-1633945274524-389f76ecb8f0?q=80&w=300&auto=format&fit=crop",
+          veg: false,
+          bestseller: false,
+          rating: 4.6,
+        },
+        {
+          id: "item4",
+          name: "Veg Biryani",
+          description: "Mixed vegetables and basmati rice cooked with aromatic spices.",
+          price: 180,
+          image: "https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?q=80&w=300&auto=format&fit=crop",
+          veg: true,
+          bestseller: false,
+          rating: 4.0,
+        },
+      ]
+    },
+    {
+      id: "cat3",
+      name: "Starters",
+      items: [
+        {
+          id: "item5",
+          name: "Chicken Tikka",
+          description: "Boneless chicken pieces marinated and grilled in clay oven.",
+          price: 210,
+          image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?q=80&w=300&auto=format&fit=crop",
+          veg: false,
+          bestseller: true,
+          rating: 4.4,
+        },
+        {
+          id: "item6",
+          name: "Paneer Tikka",
+          description: "Cubes of cottage cheese marinated with spices and grilled.",
+          price: 190,
+          image: "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?q=80&w=300&auto=format&fit=crop",
+          veg: true,
+          bestseller: false,
+          rating: 4.3,
+        },
+      ]
+    },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -336,46 +519,49 @@ const RestaurantDetails = () => {
               <div className="sticky top-20">
                 <div className="mb-4">
                   <img 
-                    src={restaurant.image} 
-                    alt={restaurant.name} 
-                    className="w-full h-48 object-cover rounded-lg" 
+                    src={restaurant?.image} 
+                    alt={restaurant?.name} 
+                    className="w-full h-48 object-cover rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=500&auto=format&fit=crop";
+                    }} 
                   />
                 </div>
                 
-                <h1 className="text-2xl font-bold text-gray-800 mb-2">{restaurant.name}</h1>
+                <h1 className="text-2xl font-bold text-gray-800 mb-2">{restaurant?.name}</h1>
                 
-                <p className="text-gray-500 mb-2">{restaurant.cuisines.join(", ")}</p>
+                <p className="text-gray-500 mb-2">{restaurant?.cuisines.join(", ")}</p>
                 
                 <p className="text-gray-500 flex items-center gap-1 mb-4">
                   <MapPin className="w-4 h-4" />
-                  {restaurant.address}
+                  {restaurant?.address}
                 </p>
                 
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white rounded">
                     <Star className="w-4 h-4 fill-white" />
-                    <span>{restaurant.rating}</span>
+                    <span>{restaurant?.rating}</span>
                   </div>
                   
                   <div className="flex items-center gap-1 text-gray-500">
                     <Clock className="w-4 h-4" />
-                    <span>{restaurant.deliveryTime} mins</span>
+                    <span>{restaurant?.deliveryTime} mins</span>
                   </div>
                   
                   <div className="text-gray-500">
-                    ₹{restaurant.priceForTwo} for two
+                    ₹{restaurant?.priceForTwo} for two
                   </div>
                 </div>
                 
                 <div className="mb-6">
                   <h3 className="font-medium text-gray-800 mb-2">Description</h3>
-                  <p className="text-sm text-gray-500">{restaurant.description}</p>
+                  <p className="text-sm text-gray-500">{restaurant?.description}</p>
                 </div>
                 
                 <div className="mb-6">
                   <h3 className="font-medium text-gray-800 mb-2">Offers</h3>
                   <div className="space-y-2">
-                    {restaurant.offers.map((offer, index) => (
+                    {restaurant?.offers.map((offer, index) => (
                       <div 
                         key={index}
                         className="border border-orange-200 bg-orange-50 text-orange-800 px-3 py-2 rounded-md text-sm flex items-start gap-2"
@@ -395,13 +581,19 @@ const RestaurantDetails = () => {
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">Menu</h2>
                 
                 {/* Menu categories */}
-                {menu.map(category => (
-                  <MenuCategory 
-                    key={category.id} 
-                    category={category} 
-                    onAddToCart={handleAddToCart} 
-                  />
-                ))}
+                {menu.length > 0 ? (
+                  menu.map(category => (
+                    <MenuCategory 
+                      key={category.id} 
+                      category={category} 
+                      onAddToCart={handleAddToCart} 
+                    />
+                  ))
+                ) : (
+                  <div className="text-center py-10">
+                    <p className="text-gray-500">No menu items available for this restaurant.</p>
+                  </div>
+                )}
               </div>
               
               {/* Cart summary */}
